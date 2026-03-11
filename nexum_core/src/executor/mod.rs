@@ -755,6 +755,11 @@ impl Executor {
                     indices.push(col_idx);
                     column_names.push(alias.clone().unwrap_or_else(|| name.clone()));
                 }
+                SelectItem::Aggregate { .. } => {
+                    return Err(StorageError::ReadError(
+                        "Aggregate projection should be handled by execute_aggregate".to_string(),
+                    ));
+                }
             }
         }
 
@@ -943,6 +948,18 @@ impl Executor {
                     .as_ref()
                     .map(|a| format!("{} AS {}", name, a))
                     .unwrap_or_else(|| name.clone()),
+                SelectItem::Aggregate { func, column, alias } => {
+                    let func_name = match func {
+                        crate::sql::types::AggregateType::Count => "COUNT",
+                        crate::sql::types::AggregateType::Sum => "SUM",
+                        crate::sql::types::AggregateType::Avg => "AVG",
+                        crate::sql::types::AggregateType::Min => "MIN",
+                        crate::sql::types::AggregateType::Max => "MAX",
+                    };
+                    let col = column.as_deref().unwrap_or("*");
+                    let alias_part = alias.as_ref().map(|a| format!(" AS {}", a)).unwrap_or_default();
+                    format!("{}({}){}", func_name, col, alias_part)
+                }
             })
             .collect::<Vec<_>>()
             .join(", ");
